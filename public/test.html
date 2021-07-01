@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        button.spawn {
+            padding: 1em;
+            position: absolute;
+            bottom: 1em;
+            left: 1em;
+            cursor: pointer;
+            background-color: #e4e4e4;
+        }
+
+        .panel {
+            display: flex;
+            box-sizing: border-box;
+            flex-direction: column;
+            position: absolute;
+            top: 2em;
+            left: 2em;
+            right: 2em;
+            bottom: 8em;
+            width: calc(100% - 30vw);
+            height: calc(100% - 40vh);
+            min-height: 12em;
+            min-width: 12em;
+            z-index: 25;
+            overflow: hidden;
+            background-color: #fff;
+            border: 1px solid #0056b3;
+            resize: both;
+            font: normal normal 16px/24px Arial, sans-serif;
+        }
+
+        .panel.dragging {
+            box-shadow: 2px 2px 8px 1px #666;
+        }
+
+        .panel .header,
+        .panel .body,
+        .panel .footer {
+            padding: 1em;
+            display: flex;
+        }
+
+        .panel .header {
+            flex: 0 1 1em;
+            flex-direction: row;
+            position: relative;
+            background-color: #0056b3;
+            color: #fff;
+            cursor: move;
+            box-shadow: 0px 1px 3px 1px #666;
+        }
+
+        .panel .header .title {
+            flex: 1 0 auto;
+            font-size: 1em;
+            margin: 0;
+            font-weight: 300;
+            max-width: calc(100% - 1.5em);
+            margin: 0;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .panel .header .buttons {
+            flex: 0 1 auto;
+            display: flex;
+            flex-direction: row;
+            gap: 5px;
+            padding: 0 0 0 1em;
+            z-index: 2;
+        }
+
+        .panel .header .buttons .close,
+        .panel .header .buttons .fullscreen {
+            flex: 0 0 0;
+            cursor: pointer;
+            opacity: 0.75;
+        }
+
+        .panel .header .buttons .close:hover,
+        .panel .header .buttons .fullscreen:hover {
+            opacity: 1;
+        }
+
+        .panel .header .buttons .fullscreen {
+            margin-top: 3px;
+        }
+
+        .panel .header .drag-target {
+            background-color: #fff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 5;
+            opacity: 0.5;
+        }
+
+        .panel .body {
+            flex: 1 1 auto;
+            flex-direction: column;
+            overflow-y: scroll;
+        }
+
+        .panel .body p {
+            display: border-box;
+            padding-bottom: 1em;
+            color: #666;
+        }
+
+        .panel .footer {
+            flex: 0 1 1em;
+            flex-direction: row;
+            justify-content: flex-end;
+            background-color: #e4e4e4;
+            border-top: 1px solid #666;
+            font: normal normal 10px/14px Arial, sans-serif;
+            box-shadow: inset 0px 0px 3px 1px #999;
+        }
+
+        .panel .footer .status {
+            flex: 1 1 auto;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button class="spawn">Spawn Window</button>
+    <template id="myPanel">
+        <div class="panel" role="dialog" aria-labeledby="title">
+            <div class="header">
+                <div class="title">My Window Panel Title</div>
+                <div class="buttons">
+                    <div class="fullscreen" tabindex="0" aria-label="Toggle full screen"></div>
+                    <div class="close" tabindex="0" aria-label="Close">&#10006;</div>
+                </div>
+            </div>
+            <div class="body">
+                <p>Use my header/panel title area to drag me around. Use the resize corner on my lower right to change
+                    the size of me. Use the expansion button to make me full screen or the close button to destroy me.
+                </p>
+                <p>Suspendisse id purus diam. Vestibulum laoreet eros lobortis, maximus enim non, bibendum nisi. Ut in
+                    tortor vulputate tortor dignissim interdum vitae vel velit. Vestibulum malesuada blandit tellus,
+                    eget euismod nisi tempus in. Nam commodo aliquam erat, at venenatis augue tempus eu. Phasellus
+                    malesuada dapibus orci, dictum pulvinar velit. Nulla pellentesque blandit justo nec luctus. Sed
+                    malesuada eu turpis id laoreet. Duis et nisl molestie, commodo ex vitae, venenatis lectus. Proin
+                    sodales, metus ac dapibus imperdiet, tortor ipsum efficitur tellus, ac imperdiet sapien risus at
+                    nulla.</p>
+                <p>Nullam sem orci, aliquet ut odio ac, aliquam volutpat ante. Class aptent taciti sociosqu ad litora
+                    torquent per conubia nostra, per inceptos himenaeos. Integer eget sem hendrerit ligula ultrices
+                    viverra non ut dui. Praesent viverra metus in tellus varius tristique. Suspendisse potenti.
+                    Phasellus vehicula tempus lacinia. Cras iaculis aliquet sollicitudin. Nam vulputate pretium ipsum
+                    non sollicitudin. Phasellus sapien augue, dictum consequat porttitor vitae, faucibus at ante. Aenean
+                    ut dapibus justo. Morbi vitae luctus enim. Nam rhoncus mattis dolor, vitae varius nisl ullamcorper
+                    quis. Aenean vitae iaculis sapien. Duis neque magna, lobortis nec metus eu, bibendum dapibus lorem
+                </p>
+            </div>
+            <div class="footer">
+                <div class="status">Nulla venenatis augue sit amet purus lacinia scelerisque.</div>
+            </div>
+        </div>
+    </template>
+    <script>
+        class Panel {
+            #id = '' // panel id
+            #el = null // panel element
+            #header = null // panel's header element
+            #close = null // panel's close button
+            #fullscreen = null // panel's fullscreen and restore button
+            #iconFullscreen = document.createElement('span') // fullscreen button icon
+            #iconRestore = document.createElement('span') // restore button icon
+            #dragImage = new Image()
+            #dragTarget = null
+            #dragOffset = { // mouse position offset on the header
+                x: 0,
+                y: 0
+            }
+            #bounds = null // getBoundingClientRect - temporary bounding box created during drag start
+            #restoreBounds = null // bounding box created to save size and location for panel restoration after expansion
+
+            constructor(templateId) {
+                // generate an id for the panel
+                this.#id = Math.random().toString(36).substring(7)
+                this.#dragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs='
+
+                // get our panel template
+                const tid = templateId || 'myPanel'
+                const template = document.querySelector(`#${tid}`)
+
+                if (template) {
+                    // create our panel and add it to the document body
+                    const body = document.querySelector('body')
+                    const panel = (template.content.cloneNode(true)).querySelector('.panel')
+                    this.#el = body.appendChild(panel)
+                    // add id and make it draggable
+                    this.#el.id = this.id
+                    this.#el.draggable = true
+
+                    // get header element and buttons
+                    this.#header = this.#el.querySelector('.header')
+                    this.#fullscreen = this.#header.querySelector('.buttons > .fullscreen')
+                    this.#close = this.#header.querySelector('.buttons > .close')
+
+                    // fullscreen button icons for swapping between states
+                    this.#iconFullscreen.innerHTML = '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAARCAYAAAA7bUf6AAAABmJLR0QA/wD/AP+gvaeTAAAAzklEQVQ4jdWTMU6CQRBG3yig1NgoXIXSggNY2FEQDuA5lBPYewIgBDvPQkdv85tHwa5ZzZ+4FcGvmsn7MvMluwPnosiFeg88AR2gAWYRsSv4CHgFLhN/iYj330PWwB74SKa3iPgseB94TEvGwE1ETH5EUrfqvCa+Ole3ub8o2FdKUKOm1asOU+SaJH11WLnw30q9U68qvdfqbRtYqdPKIVN1mfvyibtAr2ZI8n17OwVogLGa679+bNM2ZMHxdh6SYQPsCj5ILN/Wc2XqE+oAPCViMMs54V4AAAAASUVORK5CYII=" width="17" height="17">'
+                    this.#iconRestore.innerHTML = '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABEAAAARCAYAAAA7bUf6AAAABmJLR0QA/wD/AP+gvaeTAAAAoklEQVQ4jc2SwQnCQBRE33rSCgIBz3aQg6ZERe3DNrQHD0FBUoMShOdlA2E1giKYue2b4fP/sDBoqSs1T1iuLj8ZUqtlwkq1fpUffbVq3xB1q1ZqBWRAk2QbIGsz6qY1QmfIFJjF5xU4hBDs+AGYA5OIjiGEyy8uGZj6OrkB+xedLIBxRM+dqJtO83e1SPwi8jazfrvefz9boh1wStg58gHrAZ5zgE3VnSEzAAAAAElFTkSuQmCC" width="17" height="17">'
+                    this.#fullscreen.appendChild(this.#iconFullscreen)
+
+                    // add event listeners to the panel for dragging
+                    this.#el.addEventListener('mousedown', this.setTarget.bind(this))
+                    this.#el.addEventListener('touchstart', this.setTarget.bind(this))
+                    this.#el.addEventListener('dragstart', this.dragStartHandler.bind(this))
+                    this.#el.addEventListener('dragover', this.dragOverHandler.bind(this))
+                    this.#el.addEventListener('touchmove', this.dragOverHandler.bind(this))
+                    this.#el.addEventListener('dragend', this.dragEndHandler.bind(this))
+                    this.#el.addEventListener('touchend', this.dragEndHandler.bind(this))
+
+                    // panel button event listeners
+                    this.#close.addEventListener('click', this.closeHandler.bind(this))
+                    this.#fullscreen.addEventListener('click', this.fullscreenHandler.bind(this))
+                } // if(template)
+            } // constructor
+
+            // Methods ==========================================================//
+
+            // Drag Handlers ....................................................//
+
+            /**
+             * Set Target
+             * @description Saves event target during initial mousedown before drag
+             * start happens.
+             * @param evt Event
+             */
+            setTarget(evt) {
+                this.#dragTarget = evt.target
+                this.#bounds = this.#el.getBoundingClientRect()
+                this.#dragOffset.x = (evt.type === 'touchstart') ? (evt.touches[0].clientX - this.#bounds.left) : (evt.clientX - this.#bounds.left)
+                this.#dragOffset.y = (evt.type === 'touchstart') ? (evt.touches[0].clientY - this.#bounds.top) : (evt.clientY - this.#bounds.top)
+            } // setTarget
+
+            /**
+             * Drag Start Handler
+             * @description Handles the drag start event, if we've grabbed the panel
+             * by the header then allow dragging to occur.
+             * @param evt Event
+             */
+            dragStartHandler(evt) {
+                if (this.#header.contains(this.#dragTarget)) {
+                    evt.dataTransfer.setData('id', this.#id)
+                    evt.dataTransfer.setDragImage(this.#dragImage, 0, 0)
+                    this.#el.classList.add('dragging')
+                } else {
+                    evt.preventDefault()
+                }
+            } // dragStartHandler
+
+            /**
+             * Drag Over Handler
+             * @description Handles the actual dragging of the element, calls a function
+             * to set the panel's location based on the mouse coordinates.
+             * @param evt Event
+             */
+            dragOverHandler(evt) {
+                let coords = { x: 0, y: 0 }
+                if (evt.type === 'touchmove' && (this.#header.contains(this.#dragTarget))) {
+                    coords = { x: evt.touches[0].clientX, y: evt.touches[0].clientY }
+                    this.setPanelCoords(coords.x, coords.y)
+                } else if (evt.type === 'dragover') {
+                    coords = { x: evt.clientX, y: evt.clientY }
+                    this.setPanelCoords(coords.x, coords.y)
+                }
+            } // dragOverHandler
+
+            /**
+             * Drag End Handler
+             * @description After dragging ends set the panel's location and remove the
+             * dragging CSS class.
+             * @param evt Event
+             */
+            dragEndHandler(evt) {
+                const coords = (evt.type === 'touchend') ? { x: evt.changedTouches[0].clientX, y: evt.changedTouches[0].clientY } : { x: evt.clientX, y: evt.clientY }
+                this.setPanelCoords(coords.clientX, coords.clientY)
+                this.#el.classList.remove('dragging')
+                this.#bounds = null
+            } // dragEndHandler
+
+            /**
+             * Set Panel Coords
+             * @description Sets the panel's top left coordinates based on the given X and Y.
+             * @param x Number
+             * @param y Number
+             */
+            setPanelCoords(x, y) {
+                this.#el.style.left = `${x - this.#dragOffset.x}px`
+                this.#el.style.top = `${y - this.#dragOffset.y}px`
+            } // setPanelCoords
+
+            // Button Handlers ..................................................//
+
+            /**
+             * Close Handler
+             * @description Removes panel from the screen.
+             */
+            closeHandler() {
+                const body = document.querySelector('body')
+                body.removeChild(this.#el)
+            } // closeHandler
+
+            /**
+             * Fullscreen Handler
+             * @descrption Expands or restores the panel's size and location based on its state.
+             */
+            fullscreenHandler() {
+                if (this.#fullscreen.contains(this.#iconFullscreen)) {
+                    // swap icon
+                    this.#fullscreen.removeChild(this.#iconFullscreen)
+                    this.#fullscreen.appendChild(this.#iconRestore)
+
+                    this.#restoreBounds = this.#el.getBoundingClientRect()
+                    // expand panel to fill screen
+                    this.#el.style.top = '0px'
+                    this.#el.style.left = '0px'
+                    this.#el.style.width = '100%'
+                    this.#el.style.height = `${window.innerHeight}px`
+                } else {
+                    // swap icon
+                    this.#fullscreen.removeChild(this.#iconRestore)
+                    this.#fullscreen.appendChild(this.#iconFullscreen)
+                    // restore panel to its original state
+                    this.#el.style.top = `${this.#restoreBounds.top}px`
+                    this.#el.style.left = `${this.#restoreBounds.left}px`
+                    this.#el.style.width = `${this.#restoreBounds.width}px`
+                    this.#el.style.height = `${this.#restoreBounds.height}px`
+                }
+            } // fullscreenHandler
+
+        } // Panel
+
+        (() => {
+            new Panel()
+
+            const spawnBtn = document.querySelector('.spawn')
+            spawnBtn.addEventListener('click', () => { new Panel() })
+        })()
+    </script>
+</body>
+
+</html>
